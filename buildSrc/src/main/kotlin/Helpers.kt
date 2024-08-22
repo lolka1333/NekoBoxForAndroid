@@ -239,7 +239,8 @@ fun Project.setupApp() {
         flavorDimensions += "vendor"
         productFlavors {
             create("oss")
-            create("fdroid")
+            // Удаляем сборку для fdroid
+            // create("fdroid")
             create("play")
         }
 
@@ -252,11 +253,12 @@ fun Project.setupApp() {
             }
         }
 
-        for (abi in listOf("Arm64", "Arm", "X64", "X86")) {
-            tasks.create("assemble" + abi + "FdroidRelease") {
-                dependsOn("assembleFdroidRelease")
-            }
-        }
+        // Удаляем задачи сборки для fdroid
+        // for (abi in listOf("Arm64", "Arm", "X64", "X86")) {
+        //     tasks.create("assemble" + abi + "FdroidRelease") {
+        //         dependsOn("assembleFdroidRelease")
+        //     }
+        // }
 
         sourceSets.getByName("main").apply {
             jniLibs.srcDir("executableSo")
