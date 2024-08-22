@@ -20,48 +20,58 @@ import (
 )
 
 type response struct {
-	packet      *packet // the original packet from the server
-	serverAddr  *Host   // the address received packet
-	changedAddr *Host   // parsed from packet
-	mappedAddr  *Host   // parsed from packet, external addr of client NAT
-	otherAddr   *Host   // parsed from packet, to replace changedAddr in RFC 5780
-	identical   bool    // if mappedAddr is in local addr list
+	packet      *packet // Original packet from the server
+	serverAddr  *Host   // Address from which the packet was received
+	changedAddr *Host   // Parsed from packet
+	mappedAddr  *Host   // Parsed from packet, external address of client NAT
+	otherAddr   *Host   // Parsed from packet, to replace changedAddr in RFC 5780
+	identical   bool    // True if mappedAddr is in local address list
 }
 
 func newResponse(pkt *packet, conn net.PacketConn) *response {
-	resp := &response{pkt, nil, nil, nil, nil, false}
+	resp := &response{
+		packet:      pkt,
+		serverAddr:  nil,
+		changedAddr: nil,
+		mappedAddr:  nil,
+		otherAddr:   nil,
+		identical:   false,
+	}
+
 	if pkt == nil {
 		return resp
 	}
-	// RFC 3489 doesn't require the server return XOR mapped address.
+
+	// RFC 3489 doesn't require the server to return XOR mapped address.
 	mappedAddr := pkt.getXorMappedAddr()
 	if mappedAddr == nil {
 		mappedAddr = pkt.getMappedAddr()
 	}
 	resp.mappedAddr = mappedAddr
-	// compute identical
+
+	// Determine if the mapped address is identical to a local address
 	localAddrStr := conn.LocalAddr().String()
 	if mappedAddr != nil {
 		mappedAddrStr := mappedAddr.String()
 		resp.identical = isLocalAddress(localAddrStr, mappedAddrStr)
 	}
-	// compute changedAddr
+
+	// Compute changedAddr
 	changedAddr := pkt.getChangedAddr()
 	if changedAddr != nil {
-		changedAddrHost := newHostFromStr(changedAddr.String())
-		resp.changedAddr = changedAddrHost
+		resp.changedAddr = newHostFromStr(changedAddr.String())
 	}
-	// compute otherAddr
+
+	// Compute otherAddr
 	otherAddr := pkt.getOtherAddr()
 	if otherAddr != nil {
-		otherAddrHost := newHostFromStr(otherAddr.String())
-		resp.otherAddr = otherAddrHost
+		resp.otherAddr = newHostFromStr(otherAddr.String())
 	}
 
 	return resp
 }
 
-// String is only used for verbose mode output.
+// String is used only for verbose mode output.
 func (r *response) String() string {
 	if r == nil {
 		return "Nil"

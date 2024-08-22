@@ -1,77 +1,84 @@
+// Start of Selection
 package libcore
 
 import (
 	"archive/zip"
 	"io"
 	"os"
-        "path/filepath"
+	"path/filepath"
 
 	"github.com/ulikunitz/xz"
-	"github.com/sagernet/sing/common"
-        E "github.com/sagernet/sing/common/exceptions"
 )
 
-func Unxz(archive string, path string) error {
-	i, err := os.Open(archive)
+// Unxz распаковывает xz-архив в указанный путь
+func Unxz(archivePath, destinationPath string) error {
+	inputFile, err := os.Open(archivePath)
 	if err != nil {
 		return err
 	}
-	r, err := xz.NewReader(i)
+	defer inputFile.Close()
+
+	xzReader, err := xz.NewReader(inputFile)
 	if err != nil {
-		i.Close()
 		return err
 	}
-	o, err := os.Create(path)
+
+	outputFile, err := os.Create(destinationPath)
 	if err != nil {
-		i.Close()
 		return err
 	}
-	_, err = io.Copy(o, r)
-	i.Close()
+	defer outputFile.Close()
+
+	_, err = io.Copy(outputFile, xzReader)
 	return err
 }
 
-func Unzip(archive string, path string) error {
-	r, err := zip.OpenReader(archive)
+// Unzip распаковывает zip-архив в указанный путь
+func Unzip(archivePath, destinationPath string) error {
+	zipReader, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
+	defer zipReader.Close()
 
-	err = os.MkdirAll(path, os.ModePerm)
-	if err != nil {
+	if err := os.MkdirAll(destinationPath, os.ModePerm); err != nil {
 		return err
 	}
 
-	for _, file := range r.File {
-		filePath := filepath.Join(path, file.Name)
+	for _, file := range zipReader.File {
+		filePath := filepath.Join(destinationPath, file.Name)
 
 		if file.FileInfo().IsDir() {
-			err = os.MkdirAll(filePath, os.ModePerm)
-			if err != nil {
+			if err := os.MkdirAll(filePath, os.ModePerm); err != nil {
 				return err
 			}
 			continue
 		}
 
-		newFile, err := os.Create(filePath)
-		if err != nil {
+		if err := extractFile(file, filePath); err != nil {
 			return err
 		}
+	}
 
-		zipFile, err := file.Open()
-		if err != nil {
-			newFile.Close()
-			return err
-		}
+	return nil
+}
 
-		var errs error
-		_, err = io.Copy(newFile, zipFile)
-		errs = E.Errors(errs, err)
-		errs = E.Errors(errs, common.Close(zipFile, newFile))
-		if errs != nil {
-			return errs
-		}
+// extractFile извлекает файл из zip-архива
+func extractFile(file *zip.File, filePath string) error {
+	newFile, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer newFile.Close()
+
+	zipFile, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer zipFile.Close()
+
+	if _, err := io.Copy(newFile, zipFile); err != nil {
+		return err
 	}
 
 	return nil

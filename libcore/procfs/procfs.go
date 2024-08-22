@@ -35,32 +35,19 @@ func ResolveSocketByProcSearch(network string, source, _ netip.AddrPort) int32 {
 		return -1
 	}
 
-	path := "/proc/net/"
-
-	if network == N.NetworkTCP {
-		path += "tcp"
-	} else {
-		path += "udp"
-	}
-
-	if source.Addr().Is6() {
-		path += "6"
-	}
+	path := buildProcPath(network, source)
 
 	sIP := source.Addr().AsSlice()
 	if len(sIP) == 0 {
 		return -1
 	}
 
-	var bytes [2]byte
-	binary.BigEndian.PutUint16(bytes[:], source.Port())
-	local := fmt.Sprintf("%s:%s", hex.EncodeToString(nativeEndianIP(sIP)), hex.EncodeToString(bytes[:]))
+	local := formatLocalAddress(sIP, source.Port())
 
 	file, err := os.Open(path)
 	if err != nil {
 		return -1
 	}
-
 	defer file.Close()
 
 	reader := bufio.NewReader(file)
@@ -72,7 +59,6 @@ func ResolveSocketByProcSearch(network string, source, _ netip.AddrPort) int32 {
 		}
 
 		fields := strings.Fields(string(row))
-
 		if len(fields) <= netIndexOfLocal || len(fields) <= netIndexOfUid {
 			continue
 		}
@@ -82,21 +68,36 @@ func ResolveSocketByProcSearch(network string, source, _ netip.AddrPort) int32 {
 			if err != nil {
 				return -1
 			}
-
 			return int32(uid)
 		}
 	}
 }
 
+func buildProcPath(network string, source netip.AddrPort) string {
+	path := "/proc/net/"
+	if network == N.NetworkTCP {
+		path += "tcp"
+	} else {
+		path += "udp"
+	}
+	if source.Addr().Is6() {
+		path += "6"
+	}
+	return path
+}
+
+func formatLocalAddress(sIP []byte, port uint16) string {
+	var bytes [2]byte
+	binary.BigEndian.PutUint16(bytes[:], port)
+	return fmt.Sprintf("%s:%s", hex.EncodeToString(nativeEndianIP(sIP)), hex.EncodeToString(bytes[:]))
+}
+
 func nativeEndianIP(ip net.IP) []byte {
 	result := make([]byte, len(ip))
-
 	for i := 0; i < len(ip); i += 4 {
 		value := binary.BigEndian.Uint32(ip[i:])
-
 		nativeEndian.PutUint32(result[i:], value)
 	}
-
 	return result
 }
 
@@ -105,27 +106,26 @@ func init() {
 	if err != nil {
 		return
 	}
-
 	defer file.Close()
 
 	reader := bufio.NewReader(file)
-
 	header, _, err := reader.ReadLine()
 	if err != nil {
 		return
 	}
 
 	columns := strings.Fields(string(header))
+	determineColumnIndices(columns)
+}
 
+func determineColumnIndices(columns []string) {
 	var txQueue, rxQueue, tr, tmWhen bool
 
 	for idx, col := range columns {
 		offset := 0
-
 		if txQueue && rxQueue {
 			offset--
 		}
-
 		if tr && tmWhen {
 			offset--
 		}

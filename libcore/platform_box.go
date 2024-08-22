@@ -43,7 +43,6 @@ func (w *boxPlatformInterfaceWrapper) UsePlatformAutoDetectInterfaceControl() bo
 }
 
 func (w *boxPlatformInterfaceWrapper) AutoDetectInterfaceControl() control.Func {
-	// "protect"
 	return func(network, address string, conn syscall.RawConn) error {
 		return control.Raw(conn, func(fd uintptr) error {
 			return intfBox.AutoDetectInterfaceControl(int32(fd))
@@ -58,18 +57,20 @@ func (w *boxPlatformInterfaceWrapper) OpenTun(options *tun.Options, platformOpti
 	if len(options.IncludeAndroidUser) > 0 {
 		return nil, E.New("android: unsupported android_user option")
 	}
-	a, _ := json.Marshal(options)
-	b, _ := json.Marshal(platformOptions)
-	tunFd, err := intfBox.OpenTun(string(a), string(b))
+
+	optionsJSON, _ := json.Marshal(options)
+	platformOptionsJSON, _ := json.Marshal(platformOptions)
+
+	tunFd, err := intfBox.OpenTun(string(optionsJSON), string(platformOptionsJSON))
 	if err != nil {
 		return nil, fmt.Errorf("intfBox.OpenTun: %v", err)
 	}
-	// Do you want to close it?
+
 	tunFd, err = syscall.Dup(tunFd)
 	if err != nil {
 		return nil, fmt.Errorf("syscall.Dup: %v", err)
 	}
-	//
+
 	options.FileDescriptor = int(tunFd)
 	return tun.New(*options)
 }
@@ -91,23 +92,18 @@ func (w *boxPlatformInterfaceWrapper) UsePlatformInterfaceGetter() bool {
 }
 
 func (w *boxPlatformInterfaceWrapper) Interfaces() ([]control.Interface, error) {
-	return nil, errors.New("wtf")
+	return nil, errors.New("operation not supported")
 }
 
 func (w *boxPlatformInterfaceWrapper) IncludeAllNetworks() bool {
 	return false
 }
 
-// Android not using
-
 func (w *boxPlatformInterfaceWrapper) UnderNetworkExtension() bool {
 	return false
 }
 
-func (w *boxPlatformInterfaceWrapper) ClearDNSCache() {
-}
-
-// process.Searcher
+func (w *boxPlatformInterfaceWrapper) ClearDNSCache() {}
 
 func (w *boxPlatformInterfaceWrapper) FindProcessInfo(ctx context.Context, network string, source netip.AddrPort, destination netip.AddrPort) (*process.Info, error) {
 	var uid int32
@@ -117,31 +113,35 @@ func (w *boxPlatformInterfaceWrapper) FindProcessInfo(ctx context.Context, netwo
 			return nil, E.New("procfs: not found")
 		}
 	} else {
-		var ipProtocol int32
-		switch N.NetworkName(network) {
-		case N.NetworkTCP:
-			ipProtocol = syscall.IPPROTO_TCP
-		case N.NetworkUDP:
-			ipProtocol = syscall.IPPROTO_UDP
-		default:
-			return nil, E.New("unknown network: ", network)
+		ipProtocol, err := getIPProtocol(network)
+		if err != nil {
+			return nil, err
 		}
-		var err error
+
 		uid, err = intfBox.FindConnectionOwner(ipProtocol, source.Addr().String(), int32(source.Port()), destination.Addr().String(), int32(destination.Port()))
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	packageName, _ := intfBox.PackageNameByUid(uid)
 	return &process.Info{UserId: uid, PackageName: packageName}, nil
 }
 
-// io.Writer
+func getIPProtocol(network string) (int32, error) {
+	switch N.NetworkName(network) {
+	case N.NetworkTCP:
+		return syscall.IPPROTO_TCP, nil
+	case N.NetworkUDP:
+		return syscall.IPPROTO_UDP, nil
+	default:
+		return 0, E.New("unknown network: ", network)
+	}
+}
 
 var disableSingBoxLog = false
 
 func (w *boxPlatformInterfaceWrapper) Write(p []byte) (n int, err error) {
-	// use neko_log
 	if !disableSingBoxLog {
 		log.Print(string(p))
 	}

@@ -16,10 +16,9 @@ import (
 func extractAssets() {
 	useOfficialAssets := intfNB4A.UseOfficialAssets()
 
-	extract := func(name string) {
-		err := extractAssetName(name, useOfficialAssets)
-		if err != nil {
-			log.Println("Extract", geoipDat, "failed:", err)
+	extract := func(assetName string) {
+		if err := extractAssetByName(assetName, useOfficialAssets); err != nil {
+			log.Printf("Failed to extract %s: %v", assetName, err)
 		}
 	}
 
@@ -28,15 +27,13 @@ func extractAssets() {
 	extract(yacdDstFolder)
 }
 
-// 这里解压的是 apk 里面的
-func extractAssetName(name string, useOfficialAssets bool) error {
-	// 支持非官方源的，就是 replaceable，放 Android 目录
-	// 不支持非官方源的，就放 file 目录
+// Extracts assets from the APK
+func extractAssetByName(assetName string, useOfficialAssets bool) error {
+	// Determine if the asset is replaceable and set the directory accordingly
 	replaceable := true
 
-	var version string
-	var apkPrefix string
-	switch name {
+	var version, apkPrefix string
+	switch assetName {
 	case geoipDat:
 		version = geoipVersion
 		apkPrefix = apkAssetPrefixSingBox
@@ -48,121 +45,130 @@ func extractAssetName(name string, useOfficialAssets bool) error {
 		replaceable = false
 	}
 
-	var dir string
+	dir := externalAssetsPath
 	if !replaceable {
 		dir = internalAssetsPath
-	} else {
-		dir = externalAssetsPath
 	}
-	dstName := dir + name
+	dstName := filepath.Join(dir, assetName)
 
-	var localVersion string
-	var assetVersion string
+	var localVersion, assetVersion string
 
-	// loadAssetVersion from APK
+	// Load asset version from APK
 	loadAssetVersion := func() error {
 		av, err := asset.Open(apkPrefix + version)
 		if err != nil {
-			return fmt.Errorf("open version in assets: %v", err)
+			return fmt.Errorf("failed to open version in assets: %v", err)
 		}
+		defer av.Close()
+
 		b, err := io.ReadAll(av)
-		av.Close()
 		if err != nil {
-			return fmt.Errorf("read internal version: %v", err)
+			return fmt.Errorf("failed to read internal version: %v", err)
 		}
 		assetVersion = string(b)
 		return nil
 	}
+
 	if err := loadAssetVersion(); err != nil {
 		return err
 	}
 
-	var doExtract bool
-
-	if _, err := os.Stat(dstName); err != nil {
-		// assetFileMissing
-		doExtract = true
-	} else if useOfficialAssets || !replaceable {
-		// 官方源升级
-		b, err := os.ReadFile(dir + version)
-		if err != nil {
-			// versionFileMissing
-			doExtract = true
-			_ = os.RemoveAll(version)
-		} else {
-			localVersion = string(b)
-			if localVersion == "Custom" {
-				doExtract = false
-			} else {
-				av, err := strconv.ParseUint(assetVersion, 10, 64)
-				if err != nil {
-					doExtract = assetVersion != localVersion
-				} else {
-					lv, err := strconv.ParseUint(localVersion, 10, 64)
-					doExtract = err != nil || av > lv
-				}
-			}
-		}
-	} else {
-		//非官方源不升级
-	}
+	doExtract := shouldExtractAsset(dstName, dir, version, assetVersion, useOfficialAssets, replaceable)
 
 	if !doExtract {
 		return nil
 	}
 
+	if err := performExtraction(apkPrefix, assetName, dstName); err != nil {
+		return err
+	}
+
+	return updateVersionFile(dir, version, assetVersion)
+}
+
+func shouldExtractAsset(dstName, dir, version, assetVersion string, useOfficialAssets, replaceable bool) bool {
+	if _, err := os.Stat(dstName); err != nil {
+		return true
+	}
+
+	if useOfficialAssets || !replaceable {
+		b, err := os.ReadFile(filepath.Join(dir, version))
+		if err != nil {
+			_ = os.RemoveAll(version)
+			return true
+		}
+
+		localVersion := string(b)
+		if localVersion == "Custom" {
+			return false
+		}
+
+		av, err := strconv.ParseUint(assetVersion, 10, 64)
+		if err != nil {
+			return assetVersion != localVersion
+		}
+
+		lv, err := strconv.ParseUint(localVersion, 10, 64)
+		return err != nil || av > lv
+	}
+
+	return false
+}
+
+func performExtraction(apkPrefix, assetName, dstName string) error {
 	extractXz := func(f asset.File) error {
 		tmpXzName := dstName + ".xz"
-		err := extractAsset(f, tmpXzName)
-		if err == nil {
-			err = Unxz(tmpXzName, dstName)
-			os.Remove(tmpXzName)
+		if err := extractAsset(f, tmpXzName); err == nil {
+			if err = Unxz(tmpXzName, dstName); err == nil {
+				os.Remove(tmpXzName)
+			}
 		}
-		if err != nil {
-			return fmt.Errorf("extract xz: %v", err)
-		}
-		return nil
+		return err
 	}
 
-	extracZip := func(f asset.File, outDir string) error {
+	extractZip := func(f asset.File, outDir string) error {
 		tmpZipName := dstName + ".zip"
-		err := extractAsset(f, tmpZipName)
-		if err == nil {
-			err = Unzip(tmpZipName, outDir)
-			os.Remove(tmpZipName)
+		if err := extractAsset(f, tmpZipName); err == nil {
+			if err = Unzip(tmpZipName, outDir); err == nil {
+				os.Remove(tmpZipName)
+			}
 		}
-		if err != nil {
-			return fmt.Errorf("extract zip: %v", err)
-		}
-		return nil
+		return err
 	}
 
-	if f, err := asset.Open(apkPrefix + name + ".xz"); err == nil {
-		extractXz(f)
+	if f, err := asset.Open(apkPrefix + assetName + ".xz"); err == nil {
+		return extractXz(f)
 	} else if f, err := asset.Open("yacd.zip"); err == nil {
 		os.RemoveAll(dstName)
-		extracZip(f, internalAssetsPath)
-		m, err := filepath.Glob(internalAssetsPath + "/Yacd-*")
-		if err != nil {
-			return fmt.Errorf("glob Yacd: %v", err)
-		}
-		if len(m) != 1 {
-			return fmt.Errorf("glob Yacd found %d result, expect 1", len(m))
-		}
-		err = os.Rename(m[0], dstName)
-		if err != nil {
-			return fmt.Errorf("rename Yacd: %v", err)
+		if err := extractZip(f, internalAssetsPath); err != nil {
+			return err
 		}
 
-	} // TODO normal file
-
-	o, err := os.Create(dir + version)
-	if err != nil {
-		return fmt.Errorf("create version: %v", err)
+		matches, err := filepath.Glob(filepath.Join(internalAssetsPath, "Yacd-*"))
+		if err != nil {
+			return fmt.Errorf("failed to glob Yacd: %v", err)
+		}
+		if len(matches) != 1 {
+			return fmt.Errorf("expected 1 Yacd result, found %d", len(matches))
+		}
+		return os.Rename(matches[0], dstName)
 	}
-	_, err = io.WriteString(o, assetVersion)
-	o.Close()
-	return err
+
+	return nil
+}
+
+func updateVersionFile(dir, version, assetVersion string) error {
+	o, err := os.Create(filepath.Join(dir, version))
+	if err != nil {
+		return fmt.Errorf("failed to create version file: %v", err)
+	}
+	defer o.Close()
+
+	if _, err = io.WriteString(o, assetVersion); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func extractAsset(i asset.File, path string) error {
@@ -172,9 +178,9 @@ func extractAsset(i asset.File, path string) error {
 		return err
 	}
 	defer o.Close()
-	_, err = io.Copy(o, i)
-	if err == nil {
-		log.Println("Extract >>", path)
+
+	if _, err = io.Copy(o, i); err == nil {
+		log.Printf("Extracted to %s", path)
 	}
 	return err
 }

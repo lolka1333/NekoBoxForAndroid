@@ -19,49 +19,56 @@ import (
 	"net"
 )
 
-func (c *Client) sendWithLog(conn net.PacketConn, addr *net.UDPAddr, changeIP bool, changePort bool) (*response, error) {
-	c.logger.Debugln("Send To:", addr)
+// sendWithLog отправляет запрос с логированием и проверяет ответ
+func (c *Client) sendWithLog(conn net.PacketConn, addr *net.UDPAddr, changeIP, changePort bool) (*response, error) {
+	c.logger.Debugln("Sending to:", addr)
 	resp, err := c.sendBindingReq(conn, addr, changeIP, changePort)
 	if err != nil {
 		return nil, err
 	}
 	c.logger.Debugln("Received:", resp)
-	if resp == nil && changeIP == false && changePort == false {
+	if resp == nil && !changeIP && !changePort {
 		return nil, errors.New("NAT blocked.")
 	}
 	if resp != nil && !addrCompare(resp.serverAddr, addr, changeIP, changePort) {
-		return nil, errors.New("Server error: response IP/port")
+		return nil, errors.New("Server error: response IP/port mismatch")
 	}
 	return resp, err
 }
 
-// Make sure IP and port  have or haven't change
+// addrCompare проверяет, изменились ли IP и порт
 func addrCompare(host *Host, addr *net.UDPAddr, IPChange, portChange bool) bool {
 	isIPChange := host.IP() != addr.IP.String()
 	isPortChange := host.Port() != uint16(addr.Port)
 	return isIPChange == IPChange && isPortChange == portChange
 }
 
+// test выполняет тест без изменения IP и порта
 func (c *Client) test(conn net.PacketConn, addr *net.UDPAddr) (*response, error) {
 	return c.sendWithLog(conn, addr, false, false)
 }
 
+// testChangePort выполняет тест с изменением порта
 func (c *Client) testChangePort(conn net.PacketConn, addr *net.UDPAddr) (*response, error) {
 	return c.sendWithLog(conn, addr, false, true)
 }
 
+// testChangeBoth выполняет тест с изменением IP и порта
 func (c *Client) testChangeBoth(conn net.PacketConn, addr *net.UDPAddr) (*response, error) {
 	return c.sendWithLog(conn, addr, true, true)
 }
 
+// test1 выполняет тест без изменения IP и порта
 func (c *Client) test1(conn net.PacketConn, addr net.Addr) (*response, error) {
 	return c.sendBindingReq(conn, addr, false, false)
 }
 
+// test2 выполняет тест с изменением IP и порта
 func (c *Client) test2(conn net.PacketConn, addr net.Addr) (*response, error) {
 	return c.sendBindingReq(conn, addr, true, true)
 }
 
+// test3 выполняет тест с изменением порта
 func (c *Client) test3(conn net.PacketConn, addr net.Addr) (*response, error) {
 	return c.sendBindingReq(conn, addr, false, true)
 }

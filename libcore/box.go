@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"libcore/device"
 	"log"
 	"runtime"
 	"runtime/debug"
@@ -15,6 +14,8 @@ import (
 	"github.com/matsuridayo/libneko/protect_server"
 	"github.com/matsuridayo/libneko/speedtest"
 	"github.com/sagernet/sing-box/boxapi"
+
+	"libcore/device"
 
 	box "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/common/conntrack"
@@ -29,22 +30,15 @@ var mainInstance *BoxInstance
 func VersionBox() string {
 	version := []string{
 		"sing-box: " + constant.Version,
-		runtime.Version() + "@" + runtime.GOOS + "/" + runtime.GOARCH,
+		fmt.Sprintf("%s@%s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH),
 	}
 
-	var tags string
-	debugInfo, loaded := debug.ReadBuildInfo()
-	if loaded {
+	if debugInfo, loaded := debug.ReadBuildInfo(); loaded {
 		for _, setting := range debugInfo.Settings {
-			switch setting.Key {
-			case "-tags":
-				tags = setting.Value
+			if setting.Key == "-tags" && setting.Value != "" {
+				version = append(version, setting.Value)
 			}
 		}
-	}
-
-	if tags != "" {
-		version = append(version, tags)
 	}
 
 	return strings.Join(version, "\n")
@@ -59,31 +53,26 @@ func ResetAllConnections(system bool) {
 
 type BoxInstance struct {
 	*box.Box
-	cancel context.CancelFunc
-	state  int
-
+	cancel       context.CancelFunc
+	state        int
 	v2api        *boxapi.SbV2rayServer
 	selector     *outbound.Selector
 	pauseManager pause.Manager
-
-	ForTest bool
+	ForTest      bool
 }
 
-func NewSingBoxInstance(config string) (b *BoxInstance, err error) {
-	defer device.DeferPanicToError("NewSingBoxInstance", func(err_ error) { err = err_ })
+func NewSingBoxInstance(config string) (*BoxInstance, error) {
+	defer device.DeferPanicToError("NewSingBoxInstance", func(err error) { err = err })
 
-	// parse options
 	var options option.Options
-	err = options.UnmarshalJSON([]byte(config))
-	if err != nil {
+	if err := options.UnmarshalJSON([]byte(config)); err != nil {
 		return nil, fmt.Errorf("decode config: %v", err)
 	}
 
-	// create box
 	ctx, cancel := context.WithCancel(context.Background())
 	sleepManager := pause.ManagerFromContext(ctx)
-	//sleepManager := pause.NewDefaultManager(ctx)
 	ctx = pause.ContextWithManager(ctx, sleepManager)
+
 	instance, err := box.New(box.Options{
 		Options:           options,
 		Context:           ctx,
@@ -94,7 +83,7 @@ func NewSingBoxInstance(config string) (b *BoxInstance, err error) {
 		return nil, fmt.Errorf("create service: %v", err)
 	}
 
-	b = &BoxInstance{
+	b := &BoxInstance{
 		Box:          instance,
 		cancel:       cancel,
 		pauseManager: sleepManager,
@@ -102,12 +91,10 @@ func NewSingBoxInstance(config string) (b *BoxInstance, err error) {
 
 	b.SetLogWritter(neko_log.LogWriter)
 
-	// fuck your sing-box platformFormatter
 	pf := instance.GetLogPlatformFormatter()
 	pf.DisableColors = true
 	pf.DisableLineBreak = false
 
-	// selector
 	if proxy, ok := b.Router().Outbound("proxy"); ok {
 		if selector, ok := proxy.(*outbound.Selector); ok {
 			b.selector = selector
@@ -117,8 +104,8 @@ func NewSingBoxInstance(config string) (b *BoxInstance, err error) {
 	return b, nil
 }
 
-func (b *BoxInstance) Start() (err error) {
-	defer device.DeferPanicToError("box.Start", func(err_ error) { err = err_ })
+func (b *BoxInstance) Start() error {
+	defer device.DeferPanicToError("box.Start", func(err error) { err = err })
 
 	if b.state == 0 {
 		b.state = 1
@@ -127,24 +114,20 @@ func (b *BoxInstance) Start() (err error) {
 	return errors.New("already started")
 }
 
-func (b *BoxInstance) Close() (err error) {
-	defer device.DeferPanicToError("box.Close", func(err_ error) { err = err_ })
+func (b *BoxInstance) Close() error {
+	defer device.DeferPanicToError("box.Close", func(err error) { err = err })
 
-	// no double close
 	if b.state == 2 {
 		return nil
 	}
 	b.state = 2
 
-	// clear main instance
 	if mainInstance == b {
 		mainInstance = nil
 		goServeProtect(false)
 	}
 
-	// close box
 	b.Close()
-	// close box.Box
 	b.Box.Close()
 
 	return nil
@@ -165,7 +148,7 @@ func (b *BoxInstance) SetAsMain() {
 }
 
 func (b *BoxInstance) SetConnectionPoolEnabled(enable bool) {
-	// TODO api
+	// TODO: Implement API
 }
 
 func (b *BoxInstance) SetV2rayStats(outbounds string) {
@@ -184,19 +167,17 @@ func (b *BoxInstance) QueryStats(tag, direct string) int64 {
 }
 
 func (b *BoxInstance) SelectOutbound(tag string) bool {
-	if b.selector != nil {
-		return b.selector.SelectOutbound(tag)
-	}
-	return false
+	return b.selector != nil && b.selector.SelectOutbound(tag)
 }
 
-func UrlTest(i *BoxInstance, link string, timeout int32) (latency int32, err error) {
-	defer device.DeferPanicToError("box.UrlTest", func(err_ error) { err = err_ })
-	if i == nil {
-		// test current
-		return speedtest.UrlTest(boxapi.CreateProxyHttpClient(mainInstance.Box), link, timeout, speedtest.UrlTestStandard_RTT)
+func UrlTest(i *BoxInstance, link string, timeout int32) (int32, error) {
+	defer device.DeferPanicToError("box.UrlTest", func(err error) { err = err })
+
+	client := boxapi.CreateProxyHttpClient(mainInstance.Box)
+	if i != nil {
+		client = boxapi.CreateProxyHttpClient(i.Box)
 	}
-	return speedtest.UrlTest(boxapi.CreateProxyHttpClient(i.Box), link, timeout, speedtest.UrlTestStandard_RTT)
+	return speedtest.UrlTest(client, link, timeout, speedtest.UrlTestStandard_RTT)
 }
 
 var protectCloser io.Closer
