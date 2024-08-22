@@ -24,46 +24,42 @@ import (
 type packet struct {
 	types      uint16
 	length     uint16
-	transID    []byte // 4 байта magic cookie + 12 байт идентификатор транзакции
+	transID    []byte // 4 bytes magic cookie + 12 bytes transaction id
 	attributes []attribute
 }
 
 func newPacket() (*packet, error) {
-	pkt := &packet{
-		transID:    make([]byte, 16),
-		attributes: make([]attribute, 0, 10),
-		length:     0,
-	}
-	binary.BigEndian.PutUint32(pkt.transID[:4], magicCookie)
-	if _, err := rand.Read(pkt.transID[4:]); err != nil {
+	v := new(packet)
+	v.transID = make([]byte, 16)
+	binary.BigEndian.PutUint32(v.transID[:4], magicCookie)
+	_, err := rand.Read(v.transID[4:])
+	if err != nil {
 		return nil, err
 	}
-	return pkt, nil
+	v.attributes = make([]attribute, 0, 10)
+	v.length = 0
+	return v, nil
 }
 
 func newPacketFromBytes(packetBytes []byte) (*packet, error) {
-	const headerSize = 20
-	if len(packetBytes) < headerSize {
-		return nil, errors.New("received data length too short")
+	if len(packetBytes) < 20 {
+		return nil, errors.New("Received data length too short.")
 	}
-	if len(packetBytes) > math.MaxUint16+headerSize {
-		return nil, errors.New("received data length too long")
+	if len(packetBytes) > math.MaxUint16+20 {
+		return nil, errors.New("Received data length too long.")
 	}
-
-	pkt := &packet{
-		types:      binary.BigEndian.Uint16(packetBytes[0:2]),
-		length:     binary.BigEndian.Uint16(packetBytes[2:4]),
-		transID:    packetBytes[4:20],
-		attributes: make([]attribute, 0, 10),
-	}
-
-	packetBytes = packetBytes[headerSize:]
+	pkt := new(packet)
+	pkt.types = binary.BigEndian.Uint16(packetBytes[0:2])
+	pkt.length = binary.BigEndian.Uint16(packetBytes[2:4])
+	pkt.transID = packetBytes[4:20]
+	pkt.attributes = make([]attribute, 0, 10)
+	packetBytes = packetBytes[20:]
 	for pos := uint16(0); pos+4 < uint16(len(packetBytes)); {
 		types := binary.BigEndian.Uint16(packetBytes[pos : pos+2])
 		length := binary.BigEndian.Uint16(packetBytes[pos+2 : pos+4])
 		end := pos + 4 + length
 		if end < pos+4 || end > uint16(len(packetBytes)) {
-			return nil, errors.New("received data format mismatch")
+			return nil, errors.New("Received data format mismatch.")
 		}
 		value := packetBytes[pos+4 : end]
 		attribute := newAttribute(types, value)
@@ -73,64 +69,64 @@ func newPacketFromBytes(packetBytes []byte) (*packet, error) {
 	return pkt, nil
 }
 
-func (p *packet) addAttribute(attr attribute) {
-	p.attributes = append(p.attributes, attr)
-	p.length += align(attr.length) + 4
+func (v *packet) addAttribute(a attribute) {
+	v.attributes = append(v.attributes, a)
+	v.length += align(a.length) + 4
 }
 
-func (p *packet) bytes() []byte {
+func (v *packet) bytes() []byte {
 	packetBytes := make([]byte, 4)
-	binary.BigEndian.PutUint16(packetBytes[0:2], p.types)
-	binary.BigEndian.PutUint16(packetBytes[2:4], p.length)
-	packetBytes = append(packetBytes, p.transID...)
-	for _, attr := range p.attributes {
+	binary.BigEndian.PutUint16(packetBytes[0:2], v.types)
+	binary.BigEndian.PutUint16(packetBytes[2:4], v.length)
+	packetBytes = append(packetBytes, v.transID...)
+	for _, a := range v.attributes {
 		buf := make([]byte, 2)
-		binary.BigEndian.PutUint16(buf, attr.types)
+		binary.BigEndian.PutUint16(buf, a.types)
 		packetBytes = append(packetBytes, buf...)
-		binary.BigEndian.PutUint16(buf, attr.length)
+		binary.BigEndian.PutUint16(buf, a.length)
 		packetBytes = append(packetBytes, buf...)
-		packetBytes = append(packetBytes, attr.value...)
+		packetBytes = append(packetBytes, a.value...)
 	}
 	return packetBytes
 }
 
-func (p *packet) getSourceAddr() *Host {
-	return p.getRawAddr(attributeSourceAddress)
+func (v *packet) getSourceAddr() *Host {
+	return v.getRawAddr(attributeSourceAddress)
 }
 
-func (p *packet) getMappedAddr() *Host {
-	return p.getRawAddr(attributeMappedAddress)
+func (v *packet) getMappedAddr() *Host {
+	return v.getRawAddr(attributeMappedAddress)
 }
 
-func (p *packet) getChangedAddr() *Host {
-	return p.getRawAddr(attributeChangedAddress)
+func (v *packet) getChangedAddr() *Host {
+	return v.getRawAddr(attributeChangedAddress)
 }
 
-func (p *packet) getOtherAddr() *Host {
-	return p.getRawAddr(attributeOtherAddress)
+func (v *packet) getOtherAddr() *Host {
+	return v.getRawAddr(attributeOtherAddress)
 }
 
-func (p *packet) getRawAddr(attrType uint16) *Host {
-	for _, attr := range p.attributes {
-		if attr.types == attrType {
-			return attr.rawAddr()
+func (v *packet) getRawAddr(attribute uint16) *Host {
+	for _, a := range v.attributes {
+		if a.types == attribute {
+			return a.rawAddr()
 		}
 	}
 	return nil
 }
 
-func (p *packet) getXorMappedAddr() *Host {
-	addr := p.getXorAddr(attributeXorMappedAddress)
+func (v *packet) getXorMappedAddr() *Host {
+	addr := v.getXorAddr(attributeXorMappedAddress)
 	if addr == nil {
-		addr = p.getXorAddr(attributeXorMappedAddressExp)
+		addr = v.getXorAddr(attributeXorMappedAddressExp)
 	}
 	return addr
 }
 
-func (p *packet) getXorAddr(attrType uint16) *Host {
-	for _, attr := range p.attributes {
-		if attr.types == attrType {
-			return attr.xorAddr(p.transID)
+func (v *packet) getXorAddr(attribute uint16) *Host {
+	for _, a := range v.attributes {
+		if a.types == attribute {
+			return a.xorAddr(v.transID)
 		}
 	}
 	return nil

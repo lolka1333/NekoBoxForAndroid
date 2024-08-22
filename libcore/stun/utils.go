@@ -18,39 +18,37 @@ import (
 	"net"
 )
 
-// padToMultipleOfFour дополняет длину среза байтов до ближайшего большего кратного 4.
-func padToMultipleOfFour(data []byte) []byte {
-	length := uint16(len(data))
-	paddingSize := alignToFour(length) - length
-	return append(data, make([]byte, paddingSize)...)
+// Padding the length of the byte slice to multiple of 4.
+func padding(bytes []byte) []byte {
+	length := uint16(len(bytes))
+	return append(bytes, make([]byte, align(length)-length)...)
 }
 
-// alignToFour выравнивает число типа uint16 до ближайшего большего кратного 4.
-func alignToFour(n uint16) uint16 {
+// Align the uint16 number to the smallest multiple of 4, which is larger than
+// or equal to the uint16 number.
+func align(n uint16) uint16 {
 	return (n + 3) & 0xfffc
 }
 
-// isLocalAddress проверяет, является ли localRemote локальным адресом.
+// isLocalAddress check if localRemote is a local address.
 func isLocalAddress(local, localRemote string) bool {
-	// Сначала разрешаем IP, возвращенный STUN-сервером.
+	// Resolve the IP returned by the STUN server first.
 	localRemoteAddr, err := net.ResolveUDPAddr("udp", localRemote)
 	if err != nil {
 		return false
 	}
-
-	// Пытаемся сравнить с локальным адресом на сокете, если он указан.
-	localAddr, err := net.ResolveUDPAddr("udp", local)
-	if err == nil && localAddr.IP != nil && !localAddr.IP.IsUnspecified() {
-		return localAddr.IP.Equal(localRemoteAddr.IP)
+	// Try comparing with the local address on the socket first, but only if
+	// it's actually specified.
+	addr, err := net.ResolveUDPAddr("udp", local)
+	if err == nil && addr.IP != nil && !addr.IP.IsUnspecified() {
+		return addr.IP.Equal(localRemoteAddr.IP)
 	}
-
-	// В случае неудачи проверяем IP всех интерфейсов.
-	interfaceAddrs, err := net.InterfaceAddrs()
+	// Fallback to checking IPs of all interfaces
+	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return false
 	}
-
-	for _, addr := range interfaceAddrs {
+	for _, addr := range addrs {
 		ip, _, err := net.ParseCIDR(addr.String())
 		if err != nil {
 			continue

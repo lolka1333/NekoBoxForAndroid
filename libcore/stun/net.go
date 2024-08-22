@@ -29,62 +29,55 @@ const (
 	maxPacketSize  = 1024
 )
 
-func (c *Client) sendBindingReq(conn net.PacketConn, addr net.Addr, changeIP, changePort bool) (*response, error) {
-	// Создание пакета.
+func (c *Client) sendBindingReq(conn net.PacketConn, addr net.Addr, changeIP bool, changePort bool) (*response, error) {
+	// Construct packet.
 	pkt, err := newPacket()
 	if err != nil {
 		return nil, err
 	}
 	pkt.types = typeBindingRequest
-	softwareAttr := newSoftwareAttribute(c.softwareName)
-	pkt.addAttribute(*softwareAttr)
-
+	attribute := newSoftwareAttribute(c.softwareName)
+	pkt.addAttribute(*attribute)
 	if changeIP || changePort {
-		changeReqAttr := newChangeReqAttribute(changeIP, changePort)
-		pkt.addAttribute(*changeReqAttr)
+		attribute = newChangeReqAttribute(changeIP, changePort)
+		pkt.addAttribute(*attribute)
 	}
-
-	// Длина атрибута отпечатка должна быть включена в CRC,
-	// поэтому мы добавляем его перед вычислением CRC, затем вычитаем после.
+	// length of fingerprint attribute must be included into crc,
+	// so we add it before calculating crc, then subtract it after calculating crc.
 	pkt.length += 8
-	fingerprintAttr := newFingerprintAttribute(pkt)
+	attribute = newFingerprintAttribute(pkt)
 	pkt.length -= 8
-	pkt.addAttribute(*fingerprintAttr)
-
-	// Отправка пакета.
+	pkt.addAttribute(*attribute)
+	// Send packet.
 	return c.send(pkt, conn, addr)
 }
 
-// RFC 3489: Клиенты ДОЛЖНЫ повторно передавать запрос, начиная с интервала
-// 100 мс, удваивая каждый раз, пока интервал не достигнет 1,6 с.
-// Повторные передачи продолжаются с интервалами 1,6 с, пока не будет получен ответ,
-// или пока не будет отправлено всего 9 запросов.
+// RFC 3489: Clients SHOULD retransmit the request starting with an interval
+// of 100ms, doubling every retransmit until the interval reaches 1.6s.
+// Retransmissions continue with intervals of 1.6s until a response is
+// received, or a total of 9 requests have been sent.
 func (c *Client) send(pkt *packet, conn net.PacketConn, addr net.Addr) (*response, error) {
 	c.logger.Info("\n" + hex.Dump(pkt.bytes()))
 	timeout := defaultTimeout
 	packetBytes := make([]byte, maxPacketSize)
-
 	for i := 0; i < numRetransmit; i++ {
-		// Отправка пакета на сервер.
+		// Send packet to the server.
 		length, err := conn.WriteTo(pkt.bytes(), addr)
 		if err != nil {
 			return nil, err
 		}
 		if length != len(pkt.bytes()) {
-			return nil, errors.New("Ошибка при отправке данных.")
+			return nil, errors.New("Error in sending data.")
 		}
-
 		err = conn.SetReadDeadline(time.Now().Add(time.Duration(timeout) * time.Millisecond))
 		if err != nil {
 			return nil, err
 		}
-
 		if timeout < maxTimeout {
 			timeout *= 2
 		}
-
 		for {
-			// Чтение с порта.
+			// Read from the port.
 			length, raddr, err := conn.ReadFrom(packetBytes)
 			if err != nil {
 				if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
@@ -92,19 +85,16 @@ func (c *Client) send(pkt *packet, conn net.PacketConn, addr net.Addr) (*respons
 				}
 				return nil, err
 			}
-
-			p, err := newPacketFromBytes(packetBytes[:length])
+			p, err := newPacketFromBytes(packetBytes[0:length])
 			if err != nil {
 				return nil, err
 			}
-
-			// Если transId не совпадает, продолжаем чтение, пока не получим
-			// совпадающий пакет или не истечет время ожидания.
+			// If transId mismatches, keep reading until get a
+			// matched packet or timeout.
 			if !bytes.Equal(pkt.transID, p.transID) {
 				continue
 			}
-
-			c.logger.Info("\n" + hex.Dump(packetBytes[:length]))
+			c.logger.Info("\n" + hex.Dump(packetBytes[0:length]))
 			resp := newResponse(p, conn)
 			resp.serverAddr = newHostFromStr(raddr.String())
 			return resp, err

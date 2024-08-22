@@ -20,8 +20,8 @@ import (
 	"strconv"
 )
 
-// Client represents a STUN client, which can set the STUN server address and is used
-// to discover the NAT type.
+// Client is a STUN client, which can be set STUN server address and is used
+// to discover NAT type.
 type Client struct {
 	serverAddr   string
 	softwareName string
@@ -29,48 +29,49 @@ type Client struct {
 	logger       *Logger
 }
 
-// NewClient returns a client without a network connection. The network
-// connection will be established when calling the Discover function.
+// NewClient returns a client without network connection. The network
+// connection will be build when calling Discover function.
 func NewClient() *Client {
-	client := &Client{}
-	client.SetSoftwareName(DefaultSoftwareName)
-	client.logger = NewLogger()
-	return client
+	c := new(Client)
+	c.SetSoftwareName(DefaultSoftwareName)
+	c.logger = NewLogger()
+	return c
 }
 
-// NewClientWithConnection returns a client that uses the given connection.
-// Note that the connection should be acquired via the net.Listen* method.
+// NewClientWithConnection returns a client which uses the given connection.
+// Please note the connection should be acquired via net.Listen* method.
 func NewClientWithConnection(conn net.PacketConn) *Client {
-	client := &Client{conn: conn}
-	client.SetSoftwareName(DefaultSoftwareName)
-	client.logger = NewLogger()
-	return client
+	c := new(Client)
+	c.conn = conn
+	c.SetSoftwareName(DefaultSoftwareName)
+	c.logger = NewLogger()
+	return c
 }
 
-// SetVerbose sets the client to verbose mode, which prints
-// information during the discovery process.
-func (c *Client) SetVerbose(verbose bool) {
-	c.logger.SetDebug(verbose)
+// SetVerbose sets the client to be in the verbose mode, which prints
+// information in the discover process.
+func (c *Client) SetVerbose(v bool) {
+	c.logger.SetDebug(v)
 }
 
-// SetVVerbose sets the client to double verbose mode, which prints
-// information and packets during the discovery process.
-func (c *Client) SetVVerbose(verbose bool) {
-	c.logger.SetInfo(verbose)
+// SetVVerbose sets the client to be in the double verbose mode, which prints
+// information and packet in the discover process.
+func (c *Client) SetVVerbose(v bool) {
+	c.logger.SetInfo(v)
 }
 
-// SetServerHost allows the user to set the STUN hostname and port.
+// SetServerHost allows user to set the STUN hostname and port.
 func (c *Client) SetServerHost(host string, port int) {
 	c.serverAddr = net.JoinHostPort(host, strconv.Itoa(port))
 }
 
-// SetServerAddr allows the user to set the transport layer STUN server address.
+// SetServerAddr allows user to set the transport layer STUN server address.
 func (c *Client) SetServerAddr(address string) {
 	c.serverAddr = address
 }
 
-// SetSoftwareName allows the user to set the name of the software, which is used
-// for logging purposes (NOT used in the current implementation).
+// SetSoftwareName allows user to set the name of the software, which is used
+// for logging purpose (NOT used in the current implementation).
 func (c *Client) SetSoftwareName(name string) {
 	c.softwareName = name
 }
@@ -98,7 +99,6 @@ func (c *Client) Discover() (NATType, *Host, error, bool) {
 	return c.discover(conn, serverUDPAddr)
 }
 
-// BehaviorTest performs a NAT behavior test.
 func (c *Client) BehaviorTest() (*NATBehavior, error) {
 	if c.serverAddr == "" {
 		c.SetServerAddr(DefaultServerAddr)
@@ -120,8 +120,8 @@ func (c *Client) BehaviorTest() (*NATBehavior, error) {
 	return c.behaviorTest(conn, serverUDPAddr)
 }
 
-// Keepalive sends and receives a bind request, which ensures the mapping stays open.
-// Only applicable when the client was created with a connection.
+// Keepalive sends and receives a bind request, which ensures the mapping stays open
+// Only applicable when client was created with a connection.
 func (c *Client) Keepalive() (*Host, error) {
 	if c.conn == nil {
 		return nil, errors.New("no connection available")
