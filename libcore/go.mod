@@ -3,10 +3,10 @@ module libcore
 go 1.20
 
 require (
-	github.com/matsuridayo/libneko v0.0.0-20240702024904-1c47a3af7199 // replaced
+	github.com/matsuridayo/libneko v1.0.0 // replaced
 	github.com/miekg/dns v1.1.61
 	github.com/sagernet/sing v0.5.0-beta.1
-	github.com/sagernet/sing-box v1.9.4 // replaced
+	github.com/sagernet/sing-box v1.0.0 // replaced
 	github.com/sagernet/sing-dns v0.3.0-beta.14
 	github.com/sagernet/sing-tun v0.4.0-beta.13.0.20240703164908-1f043289199d
 	github.com/ulikunitz/xz v0.5.12
