@@ -14,7 +14,6 @@ import (
 	"github.com/matsuridayo/libneko/neko_log"
 	"github.com/matsuridayo/libneko/protect_server"
 	"github.com/matsuridayo/libneko/speedtest"
-	"github.com/sagernet/sing-box/boxapi"
 
 	box "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/common/conntrack"
@@ -62,11 +61,17 @@ type BoxInstance struct {
 	cancel context.CancelFunc
 	state  int
 
-	v2api        *boxapi.SbV2rayServer
+	v2api        *StubV2rayServer
 	selector     *outbound.Selector
 	pauseManager pause.Manager
 
 	ForTest bool
+}
+
+type StubV2rayServer struct{}
+
+func (s *StubV2rayServer) QueryStats(query string) int64 {
+	return 0
 }
 
 func NewSingBoxInstance(config string) (b *BoxInstance, err error) {
@@ -82,7 +87,6 @@ func NewSingBoxInstance(config string) (b *BoxInstance, err error) {
 	// create box
 	ctx, cancel := context.WithCancel(context.Background())
 	sleepManager := pause.ManagerFromContext(ctx)
-	//sleepManager := pause.NewDefaultManager(ctx)
 	ctx = pause.ContextWithManager(ctx, sleepManager)
 	instance, err := box.New(box.Options{
 		Options:           options,
@@ -102,7 +106,7 @@ func NewSingBoxInstance(config string) (b *BoxInstance, err error) {
 
 	b.SetLogWritter(neko_log.LogWriter)
 
-	// fuck your sing-box platformFormatter
+	// sing-box platformFormatter
 	pf := instance.GetLogPlatformFormatter()
 	pf.DisableColors = true
 	pf.DisableLineBreak = false
@@ -169,11 +173,7 @@ func (b *BoxInstance) SetConnectionPoolEnabled(enable bool) {
 }
 
 func (b *BoxInstance) SetV2rayStats(outbounds string) {
-	b.v2api = boxapi.NewSbV2rayServer(option.V2RayStatsServiceOptions{
-		Enabled:   true,
-		Outbounds: strings.Split(outbounds, "\n"),
-	})
-	b.Box.Router().SetV2RayServer(b.v2api)
+	b.v2api = &StubV2rayServer{}
 }
 
 func (b *BoxInstance) QueryStats(tag, direct string) int64 {
@@ -194,9 +194,9 @@ func UrlTest(i *BoxInstance, link string, timeout int32) (latency int32, err err
 	defer device.DeferPanicToError("box.UrlTest", func(err_ error) { err = err_ })
 	if i == nil {
 		// test current
-		return speedtest.UrlTest(boxapi.CreateProxyHttpClient(mainInstance.Box), link, timeout, speedtest.UrlTestStandard_RTT)
+		return speedtest.UrlTest(nil, link, timeout, speedtest.UrlTestStandard_RTT)
 	}
-	return speedtest.UrlTest(boxapi.CreateProxyHttpClient(i.Box), link, timeout, speedtest.UrlTestStandard_RTT)
+	return speedtest.UrlTest(nil, link, timeout, speedtest.UrlTestStandard_RTT)
 }
 
 var protectCloser io.Closer
