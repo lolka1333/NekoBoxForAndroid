@@ -2,11 +2,12 @@ package libcore
 
 import (
 	"libcore/device"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	_ "unsafe"
+
+	"log"
 
 	"github.com/matsuridayo/libneko/neko_common"
 	"github.com/matsuridayo/libneko/neko_log"
@@ -16,8 +17,8 @@ import (
 //go:linkname resourcePaths github.com/sagernet/sing-box/constant.resourcePaths
 var resourcePaths []string
 
-func NekoLogPrintln(message string) {
-	log.Println(message)
+func NekoLogPrintln(s string) {
+	log.Println(s)
 }
 
 func NekoLogClear() {
@@ -40,19 +41,15 @@ func InitCore(process, cachePath, internalAssets, externalAssets string,
 	intfBox = if2
 	useProcfs = intfBox.UseProcFS()
 
-	// Установка рабочего каталога
-	workingDir := filepath.Join(cachePath, "../no_backup")
-	if err := os.MkdirAll(workingDir, 0755); err != nil {
-		log.Println("Ошибка создания каталога:", err)
-	}
-	if err := os.Chdir(workingDir); err != nil {
-		log.Println("Ошибка смены каталога:", err)
-	}
+	// Working dir
+	tmp := filepath.Join(cachePath, "../no_backup")
+	os.MkdirAll(tmp, 0755)
+	os.Chdir(tmp)
 
-	// Настройка путей ресурсов
+	// sing-box fs
 	resourcePaths = append(resourcePaths, externalAssets)
 
-	// Настройка логирования
+	// Set up log
 	if maxLogSizeKb < 50 {
 		maxLogSizeKb = 50
 	}
@@ -61,23 +58,24 @@ func InitCore(process, cachePath, internalAssets, externalAssets string,
 	neko_log.SetupLog(int(maxLogSizeKb)*1024, filepath.Join(cachePath, "neko.log"))
 	boxmain.SetDisableColor(true)
 
-	// Настройка компонентов
+	// nekoutils
+	// nekoutils.Selector_OnProxySelected = intfNB4A.Selector_OnProxySelected
+
+	// Set up some component
 	go func() {
 		defer device.DeferPanicToError("InitCore-go", func(err error) { log.Println(err) })
 		device.GoDebug(process)
 
-		externalAssetsPath := externalAssets
-		internalAssetsPath := internalAssets
+		externalAssetsPath = externalAssets
+		internalAssetsPath = internalAssets
 
-		// Загрузка сертификатов
-		pem, err := os.ReadFile(filepath.Join(externalAssetsPath, "ca.pem"))
+		// certs
+		pem, err := os.ReadFile(externalAssetsPath + "ca.pem")
 		if err == nil {
 			updateRootCACerts(pem)
-		} else {
-			log.Println("Ошибка чтения сертификата:", err)
 		}
 
-		// Обработка фонового процесса
+		// bg
 		if isBgProcess {
 			extractAssets()
 		}
