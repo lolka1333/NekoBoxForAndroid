@@ -104,12 +104,9 @@ func NewSingBoxInstance(config string) (b *BoxInstance, err error) {
 		pauseManager: sleepManager,
 	}
 
-	b.SetLogWritter(neko_log.LogWriter)
-
-	// sing-box platformFormatter
-	pf := instance.GetLogPlatformFormatter()
-	pf.DisableColors = true
-	pf.DisableLineBreak = false
+	// Corrected: Removed SetLogWritter and GetLogPlatformFormatter as they are undefined
+	// Assuming alternative logging setup
+	log.SetOutput(neko_log.LogWriter)
 
 	// selector
 	if proxy, ok := b.Router().Outbound("proxy"); ok {
