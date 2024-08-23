@@ -27,7 +27,6 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
         listView.layoutManager = FixedLinearLayoutManager(listView)
     }
 
@@ -42,12 +41,11 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
         addPreferencesFromResource(R.xml.global_preferences)
 
         DataStore.routePackages = DataStore.nekoPlugins
-        nekoPlugins = findPreference(Key.NEKO_PLUGIN_MANAGED)!!
+        nekoPlugins = findPreference<Key.NEKO_PLUGIN_MANAGED>()!!
         nekoPlugins.setOnPreferenceClickListener {
-            // borrow from route app settings
-            startActivity(Intent(
-                context, AppListActivity::class.java
-            ).apply { putExtra(Key.NEKO_PLUGIN_MANAGED, true) })
+            startActivity(Intent(context, AppListActivity::class.java).apply {
+                putExtra(Key.NEKO_PLUGIN_MANAGED, true)
+            })
             true
         }
 
@@ -71,6 +69,7 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
             Theme.applyNightTheme()
             true
         }
+
         val mixedPort = findPreference<EditTextPreference>(Key.MIXED_PORT)!!
         val serviceMode = findPreference<Preference>(Key.SERVICE_MODE)!!
         val allowAccess = findPreference<Preference>(Key.ALLOW_ACCESS)!!
@@ -102,29 +101,25 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
             true
         }
         logLevel.setOnLongClickListener {
-            if (context == null) return@setOnLongClickListener true
-
-            val view = EditText(context).apply {
-                inputType = EditorInfo.TYPE_CLASS_NUMBER
-                var size = DataStore.logBufSize
-                if (size == 0) size = 50
-                setText(size.toString())
-            }
-
-            MaterialAlertDialogBuilder(requireContext()).setTitle("Log buffer size (kb)")
-                .setView(view)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
-                    DataStore.logBufSize = view.text.toString().toInt()
-                    if (DataStore.logBufSize <= 0) DataStore.logBufSize = 50
-                    needRestart()
+            context?.let {
+                val view = EditText(it).apply {
+                    inputType = EditorInfo.TYPE_CLASS_NUMBER
+                    setText(DataStore.logBufSize.takeIf { it > 0 }?.toString() ?: "50")
                 }
-                .setNegativeButton(android.R.string.cancel, null)
-                .show()
+
+                MaterialAlertDialogBuilder(it).setTitle("Log buffer size (kb)")
+                    .setView(view)
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        DataStore.logBufSize = view.text.toString().toInt().takeIf { it > 0 } ?: 50
+                        needRestart()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
             true
         }
 
         val muxProtocols = findPreference<MultiSelectListPreference>(Key.MUX_PROTOCOLS)!!
-
         muxProtocols.apply {
             val e = Protocols.getCanMuxList().toTypedArray()
             entries = e
@@ -146,8 +141,7 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
             newValue
         }
 
-        val profileTrafficStatistics =
-            findPreference<SwitchPreference>(Key.PROFILE_TRAFFIC_STATISTICS)!!
+        val profileTrafficStatistics = findPreference<SwitchPreference>(Key.PROFILE_TRAFFIC_STATISTICS)!!
         val speedInterval = findPreference<SimpleMenuPreference>(Key.SPEED_INTERVAL)!!
         profileTrafficStatistics.isEnabled = speedInterval.value.toString() != "0"
         speedInterval.setOnPreferenceChangeListener { _, newValue ->
@@ -166,39 +160,21 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
         val acquireWakeLock = findPreference<SwitchPreference>(Key.ACQUIRE_WAKE_LOCK)!!
         val enableClashAPI = findPreference<SwitchPreference>(Key.ENABLE_CLASH_API)!!
         enableClashAPI.setOnPreferenceChangeListener { _, newValue ->
-            (activity as MainActivity?)?.refreshNavMenu(newValue as Boolean)
+            (activity as? MainActivity)?.refreshNavMenu(newValue as Boolean)
             needReload()
             true
         }
 
-        mixedPort.onPreferenceChangeListener = reloadListener
-        appendHttpProxy.onPreferenceChangeListener = reloadListener
-        showDirectSpeed.onPreferenceChangeListener = reloadListener
-        trafficSniffing.onPreferenceChangeListener = reloadListener
-        muxConcurrency.onPreferenceChangeListener = reloadListener
-        tcpKeepAliveInterval.onPreferenceChangeListener = reloadListener
-        bypassLan.onPreferenceChangeListener = reloadListener
-        bypassLanInCore.onPreferenceChangeListener = reloadListener
-        mtu.onPreferenceChangeListener = reloadListener
-
-        enableFakeDns.onPreferenceChangeListener = reloadListener
-        remoteDns.onPreferenceChangeListener = reloadListener
-        directDns.onPreferenceChangeListener = reloadListener
-        enableDnsRouting.onPreferenceChangeListener = reloadListener
-
-        portLocalDns.onPreferenceChangeListener = reloadListener
-        ipv6Mode.onPreferenceChangeListener = reloadListener
-        allowAccess.onPreferenceChangeListener = reloadListener
-
-        resolveDestination.onPreferenceChangeListener = reloadListener
-        tunImplementation.onPreferenceChangeListener = reloadListener
-        acquireWakeLock.onPreferenceChangeListener = reloadListener
-
+        listOf(
+            mixedPort, appendHttpProxy, showDirectSpeed, trafficSniffing, muxConcurrency,
+            tcpKeepAliveInterval, bypassLan, bypassLanInCore, mtu, enableFakeDns, remoteDns,
+            directDns, enableDnsRouting, portLocalDns, ipv6Mode, allowAccess, resolveDestination,
+            tunImplementation, acquireWakeLock
+        ).forEach { it.onPreferenceChangeListener = reloadListener }
     }
 
     override fun onResume() {
         super.onResume()
-
         if (::isProxyApps.isInitialized) {
             isProxyApps.isChecked = DataStore.proxyApps
         }
@@ -206,5 +182,4 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
             nekoPlugins.postUpdate()
         }
     }
-
 }
