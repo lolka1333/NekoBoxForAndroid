@@ -28,7 +28,7 @@ jobs:
         with:
           path: |
             app/libs/libcore.aar
-          key: libcore-${{ hashFiles('.github/workflows/*', 'buildScript/**', 'libcore/**') }}
+          key: libcore-${{ hashFiles('.github/workflows/**', 'buildScript/**', 'libcore/**') }}
       - name: Install Golang
         if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/setup-go@v6
@@ -65,7 +65,7 @@ jobs:
         with:
           path: |
             app/libs/libcore.aar
-          key: libcore-${{ hashFiles('.github/workflows/*', 'buildScript/**', 'libcore/**') }}
+          key: libcore-${{ hashFiles('.github/workflows/**', 'buildScript/**', 'libcore/**') }}
       - name: Gradle cache
         uses: actions/cache@v4
         with:
@@ -94,7 +94,7 @@ jobs:
           path: ${{ env.APK }}
   publish:
     name: Publish Release
-    if: github.event.inputs.publish == '' || github.event.inputs.publish != 'y'
+    if: github.event.inputs.publish != 'y'
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -115,7 +115,7 @@ jobs:
           ./ghr -delete -t "${{ github.token }}" -n "${{ github.event.inputs.tag }}" "${{ github.event.inputs.tag }}" apks
   play:
     name: Build Play Bundle
-    if: github.event.inputs.play == '' || github.event.inputs.play != 'y'
+    if: github.event.inputs.play != 'y'
     runs-on: ubuntu-latest
     needs:
       - libcore
@@ -132,7 +132,7 @@ jobs:
         with:
           path: |
             app/libs/libcore.aar
-          key: libcore-${{ hashFiles('.github/workflows/*', 'buildScript/**', 'libcore/**') }}
+          key: libcore-${{ hashFiles('.github/workflows/**', 'buildScript/**', 'libcore/**') }}
       - name: Gradle cache
         uses: actions/cache@v4
         with:
