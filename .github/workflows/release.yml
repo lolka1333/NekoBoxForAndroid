@@ -29,7 +29,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/setup-go@v6
         with:
-          go-version: ^1.24
+          go-version: ^1.25
       - name: Go Cache
         if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache@v5
