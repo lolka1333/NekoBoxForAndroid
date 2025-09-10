@@ -36,7 +36,7 @@ jobs:
           go-version: ^1.25
       - name: Go Cache
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/go-build
