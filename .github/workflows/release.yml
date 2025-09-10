@@ -17,22 +17,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: LibCore Cache
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             app/libs/libcore.aar
           key: libcore-${{ hashFiles('.github/workflows/*', 'buildScript/**', 'libcore/**') }}
       - name: Install Golang
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: ^1.23
+          go-version: ^1.24
       - name: Go Cache
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/go-build
@@ -50,20 +50,20 @@ jobs:
       - libcore
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
       - name: LibCore Cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             app/libs/libcore.aar
           key: libcore-${{ hashFiles('.github/workflows/*', 'buildScript/**', 'libcore/**') }}
       - name: Gradle cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -84,7 +84,7 @@ jobs:
           APK=$(dirname $APK)
           echo "APK=$APK" >> $GITHUB_ENV
       - name: Upload APKs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: APKs
           path: ${{ env.APK }}
@@ -95,9 +95,9 @@ jobs:
     needs: build
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: APKs
           path: artifacts
@@ -117,20 +117,20 @@ jobs:
       - libcore
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
       - name: LibCore Cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             app/libs/libcore.aar
           key: libcore-${{ hashFiles('.github/workflows/*', 'buildScript/**', 'libcore/**') }}
       - name: Gradle cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -149,7 +149,7 @@ jobs:
           ./run init action gradle
           ./gradlew bundlePlayRelease
       - name: Upload Play Bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AAB
           path: app/build/outputs/bundle/playRelease/app-play-release.aab
