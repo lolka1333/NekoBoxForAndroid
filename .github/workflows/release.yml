@@ -88,7 +88,7 @@ jobs:
           APK=$(dirname $APK)
           echo "APK=$APK" >> $GITHUB_ENV
       - name: Upload APKs
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: APKs
           path: ${{ env.APK }}
@@ -101,7 +101,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Download Artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           name: APKs
           path: artifacts
@@ -153,7 +153,7 @@ jobs:
           ./run init action gradle
           ./gradlew bundlePlayRelease
       - name: Upload Play Bundle
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: AAB
           path: app/build/outputs/bundle/playRelease/app-play-release.aab
