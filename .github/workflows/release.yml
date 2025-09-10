@@ -28,7 +28,7 @@ jobs:
         with:
           path: |
             app/libs/libcore.aar
-          key: libcore-${{ hashFiles('.github/workflows/**', 'buildScript/**', 'libcore/**') }}
+          key: libcore-${{ hashFiles('libcore/go.mod', 'libcore/go.sum', '.github/workflows/release.yml') }}
       - name: Install Golang
         if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/setup-go@v6
@@ -65,7 +65,7 @@ jobs:
         with:
           path: |
             app/libs/libcore.aar
-          key: libcore-${{ hashFiles('.github/workflows/**', 'buildScript/**', 'libcore/**') }}
+          key: libcore-${{ hashFiles('libcore/go.mod', 'libcore/go.sum', '.github/workflows/release.yml') }}
       - name: Gradle cache
         uses: actions/cache@v4
         with:
@@ -132,7 +132,7 @@ jobs:
         with:
           path: |
             app/libs/libcore.aar
-          key: libcore-${{ hashFiles('.github/workflows/**', 'buildScript/**', 'libcore/**') }}
+          key: libcore-${{ hashFiles('libcore/go.mod', 'libcore/go.sum', '.github/workflows/release.yml') }}
       - name: Gradle cache
         uses: actions/cache@v4
         with:
