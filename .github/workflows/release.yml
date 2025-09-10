@@ -28,7 +28,7 @@ jobs:
         with:
           path: |
             app/libs/libcore.aar
-          key: libcore-${{ hashFiles('.github/workflows/*', 'buildScript/**', 'libcore/**') }}
+          key: libcore-${{ hashFiles('libcore/go.mod', 'libcore/go.sum', '.github/workflows/release.yml') }}
       - name: Install Golang
         if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/setup-go@v6
@@ -41,9 +41,9 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: go-${{ runner.os }}-${{ hashFiles('libcore/go.sum') }}
+          key: go-build-${{ runner.os }}-${{ hashFiles('libcore/go.sum', 'libcore/go.mod') }}
           restore-keys: |
-            go-${{ runner.os }}-
+            go-build-${{ runner.os }}-
       - name: Native Build
         if: steps.cache.outputs.cache-hit != 'true'
         run: ./run lib core
@@ -65,7 +65,7 @@ jobs:
         with:
           path: |
             app/libs/libcore.aar
-          key: libcore-${{ hashFiles('.github/workflows/*', 'buildScript/**', 'libcore/**') }}
+          key: libcore-${{ hashFiles('libcore/go.mod', 'libcore/go.sum', '.github/workflows/release.yml') }}
       - name: Gradle cache
         uses: actions/cache@v4
         with:
@@ -88,20 +88,20 @@ jobs:
           APK=$(dirname $APK)
           echo "APK=$APK" >> $GITHUB_ENV
       - name: Upload APKs
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: APKs
           path: ${{ env.APK }}
   publish:
     name: Publish Release
-    if: github.event.inputs.publish == '' || github.event.inputs.publish != 'y'
+    if: github.event.inputs.publish != 'y'
     runs-on: ubuntu-latest
     needs: build
     steps:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Download Artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           name: APKs
           path: artifacts
@@ -115,7 +115,7 @@ jobs:
           ./ghr -delete -t "${{ github.token }}" -n "${{ github.event.inputs.tag }}" "${{ github.event.inputs.tag }}" apks
   play:
     name: Build Play Bundle
-    if: github.event.inputs.play == '' || github.event.inputs.play != 'y'
+    if: github.event.inputs.play != 'y'
     runs-on: ubuntu-latest
     needs:
       - libcore
@@ -132,7 +132,7 @@ jobs:
         with:
           path: |
             app/libs/libcore.aar
-          key: libcore-${{ hashFiles('.github/workflows/*', 'buildScript/**', 'libcore/**') }}
+          key: libcore-${{ hashFiles('libcore/go.mod', 'libcore/go.sum', '.github/workflows/release.yml') }}
       - name: Gradle cache
         uses: actions/cache@v4
         with:
@@ -153,7 +153,7 @@ jobs:
           ./run init action gradle
           ./gradlew bundlePlayRelease
       - name: Upload Play Bundle
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: AAB
           path: app/build/outputs/bundle/playRelease/app-play-release.aab
